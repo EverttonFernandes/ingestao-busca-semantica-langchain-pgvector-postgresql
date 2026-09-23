@@ -7,3 +7,4 @@ psycopg[binary]==3.3.6              # Driver Python usado para conectar e execut
 python-dotenv==1.2.3                # Carrega variáveis de ambiente definidas no arquivo .env
 pypdf==6.19.0                       # Biblioteca usada para leitura e extração de conteúdo de arquivos PDF
 langchain-openai==1.6.3             # Modelos de chat e embeddings da OpenAI
+SQLAlchemy==2.0.54                 # Conexao e verificacao dos registros usados pelo PGVector

@@ -5,10 +5,10 @@ com base no documento. Fonte: [repositório oficial](https://github.com/devfullc
 
 ## Estado atual
 
-Setup de ambiente (RAGT-001). Os scripts `src/ingest.py`, `src/search.py` e `src/chat.py`
-são placeholders: exibem a funcionalidade pendente e encerram com código 1.
-Ingestão, busca e chat serão implementados nas próximas histórias. O PDF existente foi selecionado na RAGT-002 com permissao de uso e redistribuicao
-confirmada pelo usuario. OpenAI é o provedor escolhido; o teste real da API passou:
+Ambiente local e ingestão do PDF implementados. Os scripts `src/search.py` e
+`src/chat.py` ainda são placeholders e encerram com código 1; serão implementados
+nas próximas histórias. O PDF foi selecionado com permissão de uso e redistribuição
+confirmada pelo usuário. OpenAI é o provedor escolhido; o teste real da API passou:
 embedding com 1.536 dimensões e resposta curta do modelo de chat.
 Nenhuma chave de modelo é necessária para subir o banco e o pgAdmin.
 
@@ -190,18 +190,41 @@ ORDER BY table_name, ordinal_position;
 SELECT '[1,2,3]'::vector <-> '[1,2,4]'::vector AS distancia;
 ```
 
-### Visualizar os dados após implementar a ingestão
+### Visualizar os dados da ingestão
 
-Ainda não há ingestão nem tabelas de aplicação criadas por este setup. Após essa
-etapa, atualize **Databases → rag → Schemas → public → Tables**. Use as consultas
-acima para identificar as tabelas realmente criadas pela integração LangChain,
-suas collections e registros; os nomes não são presumidos aqui.
+Depois de executar a ingestão, atualize **Databases → rag → Schemas → public →
+Tables**. O `PGVector` de `langchain-postgres==0.0.18` cria
+`langchain_pg_collection` (collections e configuração) e `langchain_pg_embedding`
+(chunks e vetores). Os nomes foram conferidos no código da versão instalada.
 
 Em cada tabela identificada, abra **View/Edit Data → First 100 Rows** para visualizar
 collections, registros/chunks, conteúdo textual, metadata e embeddings. Expanda
 **Columns** para conferir os tipos: embeddings aparecem como `vector`, com sua
 sequência de números na grade. O pgAdmin permite inspecionar esses valores; ele
 não os transforma automaticamente em um gráfico de similaridade.
+
+No **Query Tool** do banco `rag`, experimente:
+
+```sql
+-- Collections e modelo/dimensão usados na ingestão
+SELECT name, cmetadata FROM public.langchain_pg_collection;
+
+-- Quantidade de chunks por collection
+SELECT c.name, count(e.id) AS chunks
+FROM public.langchain_pg_collection c
+LEFT JOIN public.langchain_pg_embedding e ON e.collection_id = c.uuid
+GROUP BY c.name;
+
+-- Texto, metadata e embedding; page é zero-based (some 1 para ler no PDF)
+SELECT e.document, e.cmetadata, vector_dims(e.embedding) AS dimensoes, e.embedding
+FROM public.langchain_pg_embedding e
+JOIN public.langchain_pg_collection c ON c.uuid = e.collection_id
+WHERE c.name = 'document_pdf'
+ORDER BY (e.cmetadata->>'chunk_index')::integer
+LIMIT 10;
+```
+
+Troque `document_pdf` na consulta se configurar outra `PGVECTOR_COLLECTION`.
 
 ## Configuração OpenAI (RAGT-002)
 
@@ -217,8 +240,8 @@ OPENAI_CHAT_MODEL=gpt-4.1-mini-2025-04-14
 ```
 
 O modelo de embeddings transforma texto em vetores de 1.536 números; o modelo de
-chat produzirá respostas usando o contexto recuperado. Os scripts de ingestão e
-chat ainda são placeholders: estas variáveis preparam as próximas histórias.
+chat produzirá respostas usando o contexto recuperado. A ingestão usa somente
+embeddings; ela não chama o modelo de chat.
 
 Preços standard consultados em 21/09/2026, em dólares por milhão de tokens:
 embeddings US$ 0,02; chat US$ 0,40 de entrada e US$ 1,60 de saída. Limites e acesso
@@ -243,13 +266,75 @@ e ano de fundação. Uso e redistribuição foram confirmados pelo usuário. Por
 a página 3 informa faturamento de R$ 10.000.000,00 e fundação em 2025 para a
 SuperTechIABrazil. O ano de fundação não deve ser interpretado como ano do faturamento.
 
-## Próximas etapas
+## Ingerir o PDF (RAG-001)
 
-A implementação seguirá chunks de 1.000 caracteres, overlap de 150 e busca `k=10`.
-Após implementar ingestão e chat, a ordem será:
+Com a venv ativa, execute na raiz do projeto:
 
 ```sh
+# Apenas ler e dividir o PDF: não acessa banco nem API
+python src/ingest.py --dry-run
+
+# Subir PostgreSQL, bootstrap e pgAdmin; aguarde postgres saudável/bootstrap exit 0
+docker compose up -d
+docker compose ps -a
+
+# Envia o texto dos chunks à OpenAI e confirma a gravação no PostgreSQL
 python src/ingest.py
+```
+
+O script lê `document.pdf` usando `PyPDFLoader` e divide cada página com
+`RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=150)`. Separadores
+podem produzir chunks menores e reduzir o overlap efetivo; páginas não são
+misturadas. O PDF de referência produz 67 chunks. Cada registro conserva `source`,
+`page` (a primeira é 0), `start_index`, `chunk_index` e `pdf_sha256`.
+
+`PGVECTOR_COLLECTION=document_pdf` é o padrão mesmo em um `.env` antigo sem essa
+variável. O `.env` é localizado pela raiz do projeto; variáveis já exportadas no
+terminal têm prioridade. Para outro PDF textual, use `--pdf caminho/arquivo.pdf`.
+PDFs digitalizados sem texto precisam de OCR externo, fora deste desafio.
+
+Para economizar, a primeira execução usa apenas embeddings `text-embedding-3-small`,
+com retries desativados. `--dry-run` estima conservadoramente o custo contando
+bytes UTF-8 dos chunks, inclusive overlap, como limite superior de tokens. Para o
+PDF atual, a estimativa é US$ 0,001020, com preço standard de US$ 0,02/milhão de
+tokens consultado em 22/09/2026 na
+[documentação oficial](https://developers.openai.com/api/docs/models/text-embedding-3-small).
+É uma estimativa, não o valor faturado. O script bloqueia uma estimativa acima de
+US$ 0,01 por execução; `--max-cost-usd VALOR` permite alterar esse limite após
+revisar o volume. Modelos sem preço revisado no código são bloqueados antes da API.
+Esse controle local não limita outros programas usando a mesma conta.
+
+### Repetir a ingestão e tratar falhas
+
+Reexecutar `python src/ingest.py` com o mesmo PDF e configuração confere os dados
+existentes e termina sem gerar embeddings novamente. IDs determinísticos e a
+verificação de textos, metadata e dimensões evitam duplicação silenciosa. Um lock
+no PostgreSQL impede duas execuções simultâneas deste script no mesmo banco.
+
+A collection registra hash do PDF, hash dos chunks, modelo, dimensão e parâmetros
+de divisão. Se algum deles mudar, o script recusa reutilizar essa collection:
+escolha outra `PGVECTOR_COLLECTION` e refaça a ingestão conscientemente. Uma coluna
+`vector(1536)` continua incompatível com outra dimensão mesmo em nova collection;
+nesse caso, prepare um banco/schema compatível com orientação explícita. Este
+script usa o schema `public` e nunca apaga collections, tabelas ou volumes.
+
+O lote de chunks é persistido em uma transação e relido antes de anunciar sucesso.
+Uma falha na API pode deixar uma collection vazia; corrigir a causa e repetir
+permite completá-la. Estado parcial ou inconsistente exige inspeção no pgAdmin.
+Se a API já respondeu e a gravação falhar, uma nova tentativa pode gerar custo
+novamente: não há cache local de embeddings. Após erro de conexão, confira os
+dados antes de repetir; falhas encerram com código 1 e mensagem sem credenciais.
+
+Para comprovar persistência, anote a contagem SQL acima, execute
+`docker compose restart postgres`, aguarde o banco saudável e repita a consulta.
+Os dados devem continuar presentes. Não use `docker compose down -v`.
+
+## Próximas etapas
+
+A próxima história implementará a busca com `k=10`, seguida de respostas baseadas
+no PDF e chat no terminal. Quando o chat estiver implementado, execute:
+
+```sh
 python src/chat.py
 ```
 
