@@ -7,9 +7,10 @@ com base no documento. Fonte: [repositório oficial](https://github.com/devfullc
 
 Setup de ambiente (RAGT-001). Os scripts `src/ingest.py`, `src/search.py` e `src/chat.py`
 são placeholders: exibem a funcionalidade pendente e encerram com código 1.
-Ingestão, busca e chat serão implementados nas próximas histórias. O PDF existente
-não foi validado como referência; a escolha do documento, provedor e modelos pertence
-à RAGT-002. Nenhuma chave de modelo é necessária para este setup.
+Ingestão, busca e chat serão implementados nas próximas histórias. O PDF existente foi selecionado na RAGT-002 com permissao de uso e redistribuicao
+confirmada pelo usuario. OpenAI é o provedor escolhido; o teste real da API passou:
+embedding com 1.536 dimensões e resposta curta do modelo de chat.
+Nenhuma chave de modelo é necessária para subir o banco.
 
 O GitHub informa que o repositório atual não é um fork do exemplo. Regularizar a
 origem conforme o enunciado é uma pendência manual que bloqueia a entrega final.
@@ -39,8 +40,7 @@ python -m pip install -r requirements.txt
 python -m pip check
 ```
 
-As dependências diretas estão fixadas em `requirements.txt`. Integrações específicas
-de OpenAI ou Gemini serão adicionadas após a escolha do provedor.
+As dependências diretas estão fixadas em `requirements.txt`. A integração OpenAI está incluída com `langchain-openai`.
 
 ## Configurar e subir o banco
 
@@ -104,6 +104,46 @@ não altera as credenciais de um volume já inicializado. Para parar sem apagar 
 ```sh
 docker compose down
 ```
+
+## Configuração OpenAI (RAGT-002)
+
+Preencha `OPENAI_API_KEY` apenas no `.env` local. Crie sua chave na
+[plataforma OpenAI](https://platform.openai.com/api-keys); não cole chaves no chat,
+README ou Git. Configure faturamento e limites na sua conta antes de usar a API.
+
+```dotenv
+OPENAI_API_KEY=
+OPENAI_EMBEDDING_MODEL=text-embedding-3-small
+OPENAI_EMBEDDING_DIMENSIONS=1536
+OPENAI_CHAT_MODEL=gpt-4.1-mini-2025-04-14
+```
+
+O modelo de embeddings transforma texto em vetores de 1.536 números; o modelo de
+chat produzirá respostas usando o contexto recuperado. Os scripts de ingestão e
+chat ainda são placeholders: estas variáveis preparam as próximas histórias.
+
+Preços standard consultados em 21/09/2026, em dólares por milhão de tokens:
+embeddings US$ 0,02; chat US$ 0,40 de entrada e US$ 1,60 de saída. Limites e acesso
+dependem da conta. Fontes: [embeddings](https://developers.openai.com/api/docs/models/text-embedding-3-small),
+[dimensões](https://developers.openai.com/api/docs/guides/embeddings) e
+[GPT-4.1 mini](https://developers.openai.com/api/docs/models/gpt-4.1-mini).
+Smoke real validado em 22/09/2026: um embedding de frase sintética retornou 1.536
+dimensões e o chat respondeu “OK”, usando 16 tokens de entrada e 1 de saída.
+O PDF não foi enviado nesse teste. O acesso depende da chave e do saldo de cada conta.
+Para economizar, testes locais devem ser priorizados e chamadas reais mantidas
+pequenas, com saída limitada e sem repetições automáticas. Saldo comprado e limite
+mensal são controles diferentes; manter auto-reload desligado evita recargas automáticas.
+
+Se trocar o modelo de embeddings ou suas dimensões, use uma nova collection e
+refaça a ingestão. Mesmo dimensões iguais não tornam modelos intercambiáveis.
+Se a tabela tiver uma coluna com dimensão fixa incompatível, será necessária uma
+tabela/schema compatível novo; mudar só a collection não altera a coluna.
+Nunca apague o volume automaticamente para corrigir incompatibilidades.
+
+O `document.pdf` selecionado contém 34 páginas textuais com empresas, faturamento
+e ano de fundação. Uso e redistribuição foram confirmados pelo usuário. Por exemplo,
+a página 3 informa faturamento de R$ 10.000.000,00 e fundação em 2025 para a
+SuperTechIABrazil. O ano de fundação não deve ser interpretado como ano do faturamento.
 
 ## Próximas etapas
 
