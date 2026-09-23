@@ -10,7 +10,7 @@ são placeholders: exibem a funcionalidade pendente e encerram com código 1.
 Ingestão, busca e chat serão implementados nas próximas histórias. O PDF existente foi selecionado na RAGT-002 com permissao de uso e redistribuicao
 confirmada pelo usuario. OpenAI é o provedor escolhido; o teste real da API passou:
 embedding com 1.536 dimensões e resposta curta do modelo de chat.
-Nenhuma chave de modelo é necessária para subir o banco.
+Nenhuma chave de modelo é necessária para subir o banco e o pgAdmin.
 
 O GitHub informa que o repositório atual não é um fork do exemplo. Regularizar a
 origem conforme o enunciado é uma pendência manual que bloqueia a entrega final.
@@ -53,7 +53,11 @@ cp -n .env.example .env
 Preencha `POSTGRES_PASSWORD` no `.env` com uma senha local. Usuário, banco e porta
 padrão são `postgres`, `rag` e `5432`. `POSTGRES_HOST=127.0.0.1` é o endereço para o
 Python executado na máquina; o bootstrap usa o hostname interno `postgres`.
-O Compose rejeita senha ausente ou vazia com um diagnóstico. Não versione `.env`.
+Preencha também `PGADMIN_DEFAULT_EMAIL` com um e-mail válido para o login local
+(por exemplo `admin@example.com`), `PGADMIN_DEFAULT_PASSWORD` com uma senha própria
+e `PGADMIN_PORT=5050`. Esse usuário é criado apenas no pgAdmin local; não exige conta
+externa. Se seu `.env` já existia, acrescente essas três variáveis do template.
+O Compose rejeita credenciais obrigatórias ausentes ou vazias. Não versione `.env`.
 
 ```sh
 docker compose config --quiet
@@ -104,6 +108,100 @@ não altera as credenciais de um volume já inicializado. Para parar sem apagar 
 ```sh
 docker compose down
 ```
+
+## pgAdmin: administrar pelo navegador
+
+O serviço `pgadmin` usa a imagem oficial `dpage/pgadmin4:9.18`, com versão fixada,
+conforme a [documentação de containers do pgAdmin](https://www.pgadmin.org/docs/pgadmin4/9.18/container_deployment.html).
+Ele compartilha a rede padrão do Compose com `postgres` e tem volume próprio
+`pgadmin_data`, montado em `/var/lib/pgadmin`, para manter usuários, conexões e configurações.
+
+```sh
+docker compose up -d
+docker compose ps -a
+```
+
+Aguarde a inicialização e abra [http://localhost:5050](http://localhost:5050).
+Se alterar `PGADMIN_PORT`, use essa porta no navegador. A interface está exposta
+somente na máquina local. Entre com o e-mail de `PGADMIN_DEFAULT_EMAIL` e a senha
+de `PGADMIN_DEFAULT_PASSWORD` do seu `.env`. As senhas locais não são publicadas
+neste README; consulte seu `.env` no editor. O login do pgAdmin e o usuário do banco
+são credenciais independentes.
+
+### Registrar o PostgreSQL
+
+No painel esquerdo, clique com o botão direito em **Servers → Register → Server**.
+Na aba **General**, escolha um nome descritivo, como **RAG local**. Na aba
+**Connection**, preencha:
+
+| Campo | Valor |
+| --- | --- |
+| Host name/address | `postgres` (nome do serviço no Compose) |
+| Port | `5432` (porta interna do PostgreSQL) |
+| Maintenance database | Valor de `POSTGRES_DB` no `.env`; padrão `rag` |
+| Username | Valor de `POSTGRES_USER` no `.env`; padrão `postgres` |
+| Password | Valor de `POSTGRES_PASSWORD` no `.env` |
+
+Clique em **Save**. Dentro do pgAdmin, **não use `localhost` como host do banco**:
+isso apontaria para o próprio container do pgAdmin. `POSTGRES_HOST=127.0.0.1` serve
+para o Python na máquina. Mesmo que `POSTGRES_PORT` mude no host, a conexão entre
+os containers continua usando **postgres:5432**. A porta **5050** é da interface web.
+
+O volume do pgAdmin é independente de `postgres_data`. Recriar o container preserva
+as configurações. `PGADMIN_DEFAULT_EMAIL` e `PGADMIN_DEFAULT_PASSWORD` inicializam
+o primeiro usuário; mudar esses valores no `.env` não redefine um usuário já
+salvo no volume. Para alterar sua senha depois, use a opção de troca de senha
+na interface do pgAdmin. `docker compose down` preserva ambos os volumes; não use
+`down -v` se quiser manter dados e configurações.
+
+### PostgreSQL e pgVector: um único banco
+
+**PostgreSQL** é o banco de dados relacional. **pgVector** é uma extensão instalada
+dentro dele que adiciona o tipo `vector` e operações de similaridade. Portanto,
+não existem dois bancos diferentes: os embeddings serão colunas `vector` em
+tabelas PostgreSQL, consultáveis pelo próprio pgAdmin.
+
+Para confirmar visualmente a extensão, expanda **Servers → RAG local → Databases →
+rag → Extensions** (substitua `rag` se configurou outro banco) e procure **vector**.
+Use **Refresh** se necessário. Selecione o banco e abra **Tools → Query Tool**;
+execute as consultas com o botão de execução (F5):
+
+```sql
+-- Listar extensões instaladas
+SELECT * FROM pg_extension;
+
+-- Confirmar pgVector: deve retornar uma linha com nome e versão
+SELECT extname, extversion
+FROM pg_extension
+WHERE extname = 'vector';
+
+-- Listar tabelas do schema public
+SELECT table_name
+FROM information_schema.tables
+WHERE table_schema = 'public';
+
+-- Descobrir colunas e tipos sem pressupor nomes de tabelas
+SELECT table_name, column_name, data_type, udt_name
+FROM information_schema.columns
+WHERE table_schema = 'public'
+ORDER BY table_name, ordinal_position;
+
+-- Experimentar distância entre vetores; resultado esperado: 1
+SELECT '[1,2,3]'::vector <-> '[1,2,4]'::vector AS distancia;
+```
+
+### Visualizar os dados após implementar a ingestão
+
+Ainda não há ingestão nem tabelas de aplicação criadas por este setup. Após essa
+etapa, atualize **Databases → rag → Schemas → public → Tables**. Use as consultas
+acima para identificar as tabelas realmente criadas pela integração LangChain,
+suas collections e registros; os nomes não são presumidos aqui.
+
+Em cada tabela identificada, abra **View/Edit Data → First 100 Rows** para visualizar
+collections, registros/chunks, conteúdo textual, metadata e embeddings. Expanda
+**Columns** para conferir os tipos: embeddings aparecem como `vector`, com sua
+sequência de números na grade. O pgAdmin permite inspecionar esses valores; ele
+não os transforma automaticamente em um gráfico de similaridade.
 
 ## Configuração OpenAI (RAGT-002)
 

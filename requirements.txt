@@ -1,9 +1,9 @@
 # Base do desafio com integracao OpenAI (RAGT-002).
-langchain==1.4.2
-langchain-community==0.4.2
-langchain-text-splitters==1.1.2
-langchain-postgres==0.0.18
-psycopg[binary]==3.3.6
-python-dotenv==1.2.3
-pypdf==6.19.0
-langchain-openai==1.6.3
+langchain==1.4.2                    # Framework principal para orquestrar o fluxo da aplicação com LLMs
+langchain-community==0.4.2          # Integrações da comunidade, como loaders e utilitários externos
+langchain-text-splitters==1.1.2     # Responsável por dividir o texto do PDF em chunks menores
+langchain-postgres==0.0.18          # Integração do LangChain com PostgreSQL e pgVector
+psycopg[binary]==3.3.6              # Driver Python usado para conectar e executar operações no PostgreSQL
+python-dotenv==1.2.3                # Carrega variáveis de ambiente definidas no arquivo .env
+pypdf==6.19.0                       # Biblioteca usada para leitura e extração de conteúdo de arquivos PDF
+langchain-openai==1.6.3             # Modelos de chat e embeddings da OpenAI
