@@ -329,6 +329,21 @@ Para comprovar persistência, anote a contagem SQL acima, execute
 `docker compose restart postgres`, aguarde o banco saudável e repita a consulta.
 Os dados devem continuar presentes. Não use `docker compose down -v`.
 
+## Como ler o código de ingestão
+
+Em `src/ingest.py`, comece pelo fluxo principal:
+
+1. `main()` lê os argumentos e transforma erros em mensagens da CLI.
+2. `run()` carrega a configuração, prepara o PDF e escolhe simulação ou ingestão.
+3. `ingest()` verifica o banco e os dados existentes antes de autorizar novos embeddings.
+4. `generate_and_store_embeddings()` chama a OpenAI, valida os vetores e grava o lote.
+5. `verify_rows()` confere os dados gravados antes de anunciar sucesso.
+
+As funções auxiliares permanecem no mesmo arquivo. As anotações como `-> bool`
+indicam o tipo retornado; em `ingest()`, `True` significa dados novos e `False`
+significa que o documento já estava completo. Elas ajudam a leitura, mas não
+substituem as validações executadas pelo código.
+
 ## Próximas etapas
 
 A próxima história implementará a busca com `k=10`, seguida de respostas baseadas
