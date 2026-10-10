@@ -335,12 +335,24 @@ Em `src/ingest.py`, comece pelo fluxo principal:
 
 1. `main()` lê os argumentos e transforma erros em mensagens da CLI.
 2. `run()` carrega a configuração, prepara o PDF e escolhe simulação ou ingestão.
-3. `ingest()` verifica o banco e os dados existentes antes de autorizar novos embeddings.
-4. `generate_and_store_embeddings()` chama a OpenAI, valida os vetores e grava o lote.
-5. `verify_rows()` confere os dados gravados antes de anunciar sucesso.
+3. `IngestionService.ingest()` em `src/ingestion/service.py` coordena a verificação,
+   o orçamento, a geração dos vetores e a confirmação da persistência.
+4. `EmbeddingService` em `embeddings.py` mantém o cliente OpenAI e valida os vetores.
+5. `PgVectorRepository` em `persistence.py` concentra conexões, lock, PGVector
+   e verificação de integridade.
 
-As funções auxiliares permanecem no mesmo arquivo. As anotações como `-> bool`
-indicam o tipo retornado; em `ingest()`, `True` significa dados novos e `False`
+`config.py` contém `Settings`, a configuração imutável com credenciais ocultadas
+na representação do objeto. `pdf.py` contém funções para leitura, chunking,
+metadata e IDs determinísticos. `errors.py` define o erro seguro da ingestão.
+A CLI continua em `src/ingest.py`, com os mesmos argumentos e comandos.
+
+Leia `prepare_pdf()` de cima para baixo: carregar o PDF, selecionar páginas com
+texto, preparar metadata e dividir em chunks. Os detalhes estão nas funções
+auxiliares logo abaixo. Em `Settings.from_env()` e nos métodos do repositório,
+o mesmo padrão separa as etapas de leitura e validação. O prefixo `_` indica
+uma função ou método de uso interno, pela convenção do Python.
+
+As anotações como `-> bool` indicam o tipo retornado; em `ingest()`, `True` significa dados novos e `False`
 significa que o documento já estava completo. Elas ajudam a leitura, mas não
 substituem as validações executadas pelo código.
 
