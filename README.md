@@ -5,11 +5,10 @@ com base no documento. Fonte: [repositório oficial](https://github.com/devfullc
 
 ## Estado atual
 
-Ambiente local e ingestão do PDF implementados. Os scripts `src/search.py` e
-`src/chat.py` ainda são placeholders e encerram com código 1; serão implementados
-nas próximas histórias. O PDF foi selecionado com permissão de uso e redistribuição
-confirmada pelo usuário. OpenAI é o provedor escolhido; o teste real da API passou:
-embedding com 1.536 dimensões e resposta curta do modelo de chat.
+Ambiente local, ingestão do PDF e recuperação semântica implementados. O script
+`src/chat.py` ainda é um placeholder e será implementado na próxima história.
+O PDF foi selecionado com permissão de uso e redistribuição confirmada pelo usuário.
+OpenAI é o provedor escolhido; embeddings e busca foram validados com 1.536 dimensões.
 Nenhuma chave de modelo é necessária para subir o banco e o pgAdmin.
 
 O GitHub informa que o repositório atual não é um fork do exemplo. Regularizar a
@@ -329,7 +328,33 @@ Para comprovar persistência, anote a contagem SQL acima, execute
 `docker compose restart postgres`, aguarde o banco saudável e repita a consulta.
 Os dados devem continuar presentes. Não use `docker compose down -v`.
 
-## Como ler o código de ingestão
+## Buscar contexto por similaridade (RAG-002)
+
+Depois de ingerir o PDF, passe uma pergunta ao script de busca:
+
+```sh
+python src/search.py "Qual o faturamento da Empresa SuperTechIABrazil?"
+```
+
+O script valida se a collection configurada existe, contém dados e foi criada com
+o mesmo modelo e a mesma dimensão definidos no `.env`. Em seguida, gera somente o
+embedding da pergunta e executa `similarity_search_with_score(..., k=10)` na
+`PGVECTOR_COLLECTION` configurada. Ele mostra cada chunk com página e score e, ao
+final, concatena apenas o texto dos chunks para formar o contexto.
+
+O score exibido é o valor bruto devolvido pelo PGVector e **não é uma porcentagem
+nem uma probabilidade**. Se a collection tiver menos de dez chunks, somente os
+registros existentes serão retornados. Uma lista vazia significa que nenhum
+contexto foi recuperado; collection ausente ou vazia, configuração incompatível e
+falhas no PostgreSQL/OpenAI produzem erros distintos e encerram o comando com código
+1. A busca nunca consulta outra collection para completar resultados.
+
+Na validação funcional do PDF de referência, a pergunta do exemplo recuperou dez
+chunks e encontrou o trecho `SuperTechIABrazil R$ 10.000.000,00 2025` na posição 2.
+Essa execução usa uma chamada pequena à API de embeddings. Os testes unitários e a
+integração sintética não acessam a OpenAI e devem ser preferidos durante o estudo.
+
+## Como ler o código
 
 Em `src/ingest.py`, comece pelo fluxo principal:
 
@@ -346,6 +371,12 @@ na representação do objeto. `pdf.py` contém funções para leitura, chunking,
 metadata e IDs determinísticos. `errors.py` define o erro seguro da ingestão.
 A CLI continua em `src/ingest.py`, com os mesmos argumentos e comandos.
 
+Para a busca, `src/search.py` interpreta a pergunta e apresenta os resultados.
+`SemanticSearchService` em `src/retrieval/service.py` valida a entrada e a
+collection, cria o mesmo cliente de embeddings usado pela ingestão e solicita os
+dez vizinhos mais similares. `retrieval/errors.py` mantém separados os erros
+esperados que a CLI pode mostrar com segurança.
+
 Leia `prepare_pdf()` de cima para baixo: carregar o PDF, selecionar páginas com
 texto, preparar metadata e dividir em chunks. Os detalhes estão nas funções
 auxiliares logo abaixo. Em `Settings.from_env()` e nos métodos do repositório,
@@ -358,8 +389,8 @@ substituem as validações executadas pelo código.
 
 ## Próximas etapas
 
-A próxima história implementará a busca com `k=10`, seguida de respostas baseadas
-no PDF e chat no terminal. Quando o chat estiver implementado, execute:
+A próxima história usará o contexto recuperado para gerar respostas baseadas no
+PDF e oferecer chat no terminal. Quando o chat estiver implementado, execute:
 
 ```sh
 python src/chat.py

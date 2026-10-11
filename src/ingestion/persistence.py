@@ -149,6 +149,16 @@ class PgVectorRepository:
         """)
         return connection.execute(collection_query, {"name": name}).mappings().one_or_none()
 
+    def collection_size(self, connection: Connection, collection_id) -> int:
+        """Conta somente os embeddings pertencentes à collection informada."""
+        count_query = text("""
+            SELECT count(*) FROM public.langchain_pg_embedding
+            WHERE collection_id=:collection_id
+        """)
+        return connection.execute(
+            count_query, {"collection_id": collection_id},
+        ).scalar_one()
+
     def _collection_table_exists(self, connection: Connection) -> bool:
         # Consultar o catalogo evita reutilizar a ausencia de uma relacao resolvida
         # antes de outra conexao (PGVector) criar e confirmar as tabelas.
