@@ -5,8 +5,9 @@ com base no documento. Fonte: [repositório oficial](https://github.com/devfullc
 
 ## Estado atual
 
-Ambiente local, ingestão do PDF e recuperação semântica implementados. O script
-`src/chat.py` ainda é um placeholder e será implementado na próxima história.
+Ambiente local, ingestão do PDF, recuperação semântica e resposta pontual com LLM
+implementados. O script `src/chat.py` ainda é um placeholder; o loop interativo
+será implementado na próxima história.
 O PDF foi selecionado com permissão de uso e redistribuição confirmada pelo usuário.
 OpenAI é o provedor escolhido; embeddings e busca foram validados com 1.536 dimensões.
 Nenhuma chave de modelo é necessária para subir o banco e o pgAdmin.
@@ -354,6 +355,50 @@ chunks e encontrou o trecho `SuperTechIABrazil R$ 10.000.000,00 2025` na posiç�
 Essa execução usa uma chamada pequena à API de embeddings. Os testes unitários e a
 integração sintética não acessam a OpenAI e devem ser preferidos durante o estudo.
 
+## Responder com base no PDF (RAG-003)
+
+Com o PostgreSQL ativo, PDF já ingerido e venv ativa, execute na raiz:
+
+```sh
+PYTHONPATH=src python -m answering "Qual o faturamento da SuperTechIABrazil?"
+PYTHONPATH=src python -m answering "Quantos clientes temos em 2024?"
+```
+
+Validação real em 11/10/2026: faturamento e fundação da SuperTechIABrazil
+respondidos com suporte no PDF; informação ausente, opinião e tentativas de
+injeção pela pergunta e por texto sintético recuperado retornaram a recusa literal.
+
+A execução recupera até dez chunks, preenche o prompt literal do desafio com os
+textos e a pergunta e chama `ChatOpenAI`. O modelo é definido por
+`OPENAI_CHAT_MODEL`; o padrão revisado é `gpt-4.1-mini-2025-04-14`. A resposta
+para ausência de suporte explícito ou pedido de opinião é:
+
+```text
+Não tenho informações necessárias para responder sua pergunta.
+```
+
+O prompt do desafio é preservado integralmente na mensagem do usuário. Uma
+mensagem de sistema adicional estabelece que instruções presentes na pergunta
+ou nos chunks são dados não confiáveis e não podem substituir as regras.
+Essa orientação reduz o risco, mas não garante matematicamente a ausência de
+alucinações ou de sucesso de uma injeção de prompt. Confira respostas importantes
+com o texto original do PDF; scores não comprovam que a informação esteja nele.
+
+Cada pergunta normalmente usa uma chamada de embeddings e uma de chat. O chat
+usa temperatura zero, saída limitada a 160 tokens e nenhuma repetição automática.
+Uma estimativa conservadora inclui bytes UTF-8 da entrada, reserva de envelope
+e o limite completo de saída; chamadas estimadas acima de US$ 0,01 são bloqueadas
+antes de criar o cliente de chat. Preços standard revisados em 11/10/2026:
+US$ 0,40/milhão de tokens de entrada e US$ 1,60/milhão de saída, conforme a
+[documentação do modelo](https://developers.openai.com/api/docs/models/gpt-4.1-mini).
+Outro modelo exige revisar seus preços no código. O limite é por chamada de chat,
+não um teto acumulado da conta nem do custo de embeddings.
+
+Contexto vazio retorna a recusa sem chamada de chat. Falhas de banco/API,
+configuração inválida ou saída vazia/truncada são erros técnicos, com código de
+saída 1; elas não são apresentadas como informação ausente no PDF. O texto dos
+chunks recuperados é enviado à OpenAI para gerar a resposta.
+
 ## Como ler o código
 
 Em `src/ingest.py`, comece pelo fluxo principal:
@@ -377,6 +422,11 @@ collection, cria o mesmo cliente de embeddings usado pela ingestão e solicita o
 dez vizinhos mais similares. `retrieval/errors.py` mantém separados os erros
 esperados que a CLI pode mostrar com segurança.
 
+Para responder, `AnswerService` em `src/answering/service.py` coordena busca e
+geração. `prompt.py` contém o prompt e a recusa literal; `model.py` concentra
+orçamento, cliente de chat e validação da saída. `answering/__main__.py` recebe
+uma pergunta e transforma falhas técnicas em mensagens seguras.
+
 Leia `prepare_pdf()` de cima para baixo: carregar o PDF, selecionar páginas com
 texto, preparar metadata e dividir em chunks. Os detalhes estão nas funções
 auxiliares logo abaixo. Em `Settings.from_env()` e nos métodos do repositório,
@@ -389,8 +439,8 @@ substituem as validações executadas pelo código.
 
 ## Próximas etapas
 
-A próxima história usará o contexto recuperado para gerar respostas baseadas no
-PDF e oferecer chat no terminal. Quando o chat estiver implementado, execute:
+A próxima história oferecerá o loop de chat no terminal usando a resposta
+implementada. Quando o chat estiver implementado, execute:
 
 ```sh
 python src/chat.py
