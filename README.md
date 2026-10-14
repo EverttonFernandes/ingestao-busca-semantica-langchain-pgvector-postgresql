@@ -5,9 +5,8 @@ com base no documento. Fonte: [repositório oficial](https://github.com/devfullc
 
 ## Estado atual
 
-Ambiente local, ingestão do PDF, recuperação semântica e resposta pontual com LLM
-implementados. O script `src/chat.py` ainda é um placeholder; o loop interativo
-será implementado na próxima história.
+Ambiente local, ingestão do PDF, recuperação semântica, resposta com LLM e chat
+contínuo no terminal implementados.
 O PDF foi selecionado com permissão de uso e redistribuição confirmada pelo usuário.
 OpenAI é o provedor escolhido; embeddings e busca foram validados com 1.536 dimensões.
 Nenhuma chave de modelo é necessária para subir o banco e o pgAdmin.
@@ -399,6 +398,51 @@ configuração inválida ou saída vazia/truncada são erros técnicos, com cód
 saída 1; elas não são apresentadas como informação ausente no PDF. O texto dos
 chunks recuperados é enviado à OpenAI para gerar a resposta.
 
+## Conversar no terminal (RAG-004)
+
+Na raiz, com a venv ativa e as configurações do `.env` preenchidas:
+
+```sh
+docker compose up -d
+python src/ingest.py
+python src/chat.py
+```
+
+Se o PDF já estiver completamente ingerido com a mesma configuração, a ingestão
+confere os dados e não gera novos embeddings. Aguarde PostgreSQL saudável e o
+bootstrap concluído antes de iniciar o chat.
+
+Exemplo de sessão:
+
+```text
+Faça sua pergunta sobre o PDF. Digite sair para encerrar.
+PERGUNTA: Qual o faturamento da SuperTechIABrazil?
+RESPOSTA: O faturamento da SuperTechIABrazil é de R$ 10.000.000,00.
+
+PERGUNTA: Quantos clientes a SuperTechIABrazil teve em 2024?
+RESPOSTA: Não tenho informações necessárias para responder sua pergunta.
+
+PERGUNTA: sair
+Chat encerrado.
+```
+
+Você pode fazer várias perguntas sem reiniciar o programa. Cada pergunta recupera
+seu próprio contexto: não há memória das mensagens anteriores. Informe nomes
+completos, em vez de depender de referências como “e essa empresa?”. A redação de
+uma resposta positiva pode variar; a recusa deve conservar a frase literal.
+
+Linhas vazias ou com espaços mostram uma orientação e não chamam banco/API.
+`sair` (sem diferenciar maiúsculas/minúsculas), Ctrl+D/EOF ou Ctrl+C encerram sem
+traceback e com código 0. O serviço só é inicializado após a primeira pergunta
+com texto. Uma falha técnica apresenta diagnóstico seguro e encerra com código 1,
+sem tentar novamente automaticamente; confira banco, configuração ou saldo antes
+de reiniciar. Se a interrupção ocorrer durante uma chamada já enviada, ela pode
+ter sido processada pelo provedor.
+
+Cada pergunta válida usa o fluxo e os limites de custo descritos acima. O limite
+do chat é por chamada, não um orçamento acumulado da sessão. Nenhum comando de
+saída nem entrada em branco gera uma chamada paga.
+
 ## Como ler o código
 
 Em `src/ingest.py`, comece pelo fluxo principal:
@@ -427,6 +471,11 @@ geração. `prompt.py` contém o prompt e a recusa literal; `model.py` concentra
 orçamento, cliente de chat e validação da saída. `answering/__main__.py` recebe
 uma pergunta e transforma falhas técnicas em mensagens seguras.
 
+Em `src/chat.py`, `main()` trata encerramento e falhas; `run_session()` lê uma
+pergunta, trata branco/saída e apresenta a resposta. `create_answer_service()`
+conecta as dependências existentes na primeira pergunta válida. As duas CLIs de
+resposta compartilham os diagnósticos seguros de `answering/cli.py`.
+
 Leia `prepare_pdf()` de cima para baixo: carregar o PDF, selecionar páginas com
 texto, preparar metadata e dividir em chunks. Os detalhes estão nas funções
 auxiliares logo abaixo. Em `Settings.from_env()` e nos métodos do repositório,
@@ -439,12 +488,6 @@ substituem as validações executadas pelo código.
 
 ## Próximas etapas
 
-A próxima história oferecerá o loop de chat no terminal usando a resposta
-implementada. Quando o chat estiver implementado, execute:
-
-```sh
-python src/chat.py
-```
-
-A resposta obrigatória para informação ausente será:
-“Não tenho informações necessárias para responder sua pergunta.”
+As próximas histórias consolidarão qualidade, segurança e reprodutibilidade e
+prepararão a entrega pública. A exigência de fork do repositório oficial continua
+pendente para a entrega final.

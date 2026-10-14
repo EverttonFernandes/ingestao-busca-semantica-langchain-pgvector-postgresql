@@ -3,15 +3,12 @@ import argparse
 import sys
 
 from dotenv import load_dotenv
-from openai import APIError
-from sqlalchemy.exc import SQLAlchemyError
 
 from ingestion.config import ROOT, Settings
-from ingestion.errors import IngestError
-from retrieval.errors import SearchError
 from retrieval.service import SemanticSearchService
 
-from .model import AnswerError, ChatModel
+from .cli import describe_error
+from .model import ChatModel
 from .service import AnswerService
 
 
@@ -26,15 +23,8 @@ def main(argv: list[str] | None = None) -> int:
         service = AnswerService(SemanticSearchService(settings), model)
         print(service.answer(" ".join(arguments.question)))
         return 0
-    except (AnswerError, SearchError, IngestError) as error:
-        message = str(error)
-    except APIError:
-        message = "Falha na OpenAI. Confira chave, saldo, modelo e conexão antes de repetir."
-    except SQLAlchemyError:
-        message = "Falha no PostgreSQL. Confira Docker e as variáveis POSTGRES_* do .env."
-    except Exception:
-        message = "Falha inesperada ao responder. Detalhes externos foram ocultados."
-    print(f"Erro: {message}", file=sys.stderr)
+    except Exception as error:
+        print(f"Erro: {describe_error(error)}", file=sys.stderr)
     return 1
 
 
