@@ -264,6 +264,10 @@ O `document.pdf` selecionado contém 34 páginas textuais com empresas, faturame
 e ano de fundação. Uso e redistribuição foram confirmados pelo usuário. Por exemplo,
 a página 3 informa faturamento de R$ 10.000.000,00 e fundação em 2025 para a
 SuperTechIABrazil. O ano de fundação não deve ser interpretado como ano do faturamento.
+O arquivo foi fornecido pelo responsável pelo projeto; sua inclusão se baseia
+nessa autorização declarada. Não foi atribuída uma licença pública específica ao
+PDF. Antes de substituí-lo por outro documento, confirme também a permissão para
+publicá-lo e enviar seu texto ao provedor.
 
 ## Ingerir o PDF (RAG-001)
 
@@ -486,8 +490,59 @@ As anotações como `-> bool` indicam o tipo retornado; em `ingest()`, `True` si
 significa que o documento já estava completo. Elas ajudam a leitura, mas não
 substituem as validações executadas pelo código.
 
+## Verificações e solução de problemas
+
+Para conferir o preparo do PDF e a entrada da CLI sem pagar por API:
+
+```sh
+python src/ingest.py --dry-run
+printf '\nsair\n' | python src/chat.py
+python -m pip check
+docker compose config --quiet
+```
+
+O dry-run não acessa banco nem API. O chat ignora o branco e encerra sem criar os
+serviços. Já executar ingestão pela primeira vez ou enviar uma pergunta válida
+pode gerar custo: essas verificações reais são separadas das verificações locais.
+
+| Situação | Ação |
+| --- | --- |
+| `python` ausente ou módulo não encontrado | Ative a venv na raiz com `source venv/bin/activate`; instale `requirements.txt`. Use `python3` para criar a venv. |
+| Venv falha por ausência de `ensurepip` | Siga a alternativa de bootstrap do pip na seção de instalação; não instale pacotes no Python global. |
+| Docker não responde | Inicie Docker Desktop/daemon. No WSL, confira a integração da distribuição nas configurações do Docker Desktop. Repita `docker compose ps -a`. |
+| Porta 5432 ou 5050 ocupada | Ajuste `POSTGRES_PORT` ou `PGADMIN_PORT` no `.env` e recrie os serviços com `docker compose up -d`; a porta interna do banco continua 5432. |
+| Compose recusa variável obrigatória | Copie `.env.example` para `.env` sem sobrescrever valores existentes e preencha as senhas e o e-mail local. |
+| PostgreSQL recusa a senha | Confira a senha usada quando o volume foi inicializado; alterar `.env` não troca a senha de um usuário já existente. Não apague o volume para tentar corrigir. |
+| Extension `vector` ausente | Confira `docker compose logs bootstrap_vector_ext`; espere o bootstrap concluir com código 0. |
+| Collection ausente/vazia | Execute `python src/ingest.py` depois de confirmar o banco e o custo. |
+| Collection ou dimensão incompatível | Mantenha o modelo/dimensão originais ou prepare outra collection e, se necessário, outro banco/schema compatível. Não há exclusão automática. |
+| Falha OpenAI, saldo/cota ou autenticação | Confira a chave local, acesso ao modelo e Billing/Usage. Não publique a chave nem repita chamadas automaticamente. |
+| LLM retorna saída truncada | O programa encerra com erro técnico. Revise o limite de saída no código e o tamanho da pergunta antes de repetir uma chamada paga. |
+
+Validação do zero em 14/10/2026: venv nova com Python 3.14.4, instalação limpa,
+56 testes locais aprovados e banco Compose isolado. Foram ingeridos 67 chunks
+com vetores de 1.536 dimensões; o checksum foi preservado após reinício. A CLI
+respondeu aos três fatos do gabarito e recusou literalmente informação ausente e
+opinião. A prova real usou um lote de embeddings e cinco perguntas; unitários e
+integrações sintéticas com PostgreSQL foram executados separadamente, sem OpenAI.
+Nenhuma porcentagem de cobertura foi medida.
+
+As dependências diretas estão fixadas e a instalação deve terminar com
+`python -m pip check` sem conflitos. Dependências transitivas são resolvidas pelo
+pip: `requirements.txt` não é um lock completo nem garante versões transitivas
+idênticas em qualquer data ou sistema. A validação do zero registra o Python e os
+pacotes efetivamente instalados; ela não comprova todas as versões de Python e
+plataformas possíveis. Não atualize modelos/dimensões para resolver um problema
+de instalação sem revisar a compatibilidade dos dados existentes.
+
+O conjunto público contém a estrutura do desafio e `.gitignore`. `.env`, venv,
+caches, logs, testes e documentos internos permanecem locais. A verificação de
+segredos cobre o conjunto rastreado, o histórico Git alcançável, padrões de chave
+OpenAI e valores locais conhecidos; não substitui uma auditoria de segurança
+universal nem comprova ausência de toda vulnerabilidade nas dependências.
+
 ## Próximas etapas
 
-As próximas histórias consolidarão qualidade, segurança e reprodutibilidade e
-prepararão a entrega pública. A exigência de fork do repositório oficial continua
-pendente para a entrega final.
+A próxima história preparará a entrega pública. A exigência de fork do
+repositório oficial e a submissão no canal do MBA continuam pendentes para a
+entrega final.
